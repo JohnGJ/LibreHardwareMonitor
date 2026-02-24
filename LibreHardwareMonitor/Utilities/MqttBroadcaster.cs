@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using LibreHardwareMonitor.Hardware;
 using LibreHardwareMonitor.UI;
+using MQTTnet;
 using MQTTnet.Client;
 
 namespace LibreHardwareMonitor.Utilities;
@@ -16,37 +17,31 @@ public class MqttBroadcaster
 {
     private readonly PersistentSettings _settings;
 
-    private IMqttClient _mqttClient;
+    private IMqttClient? _mqttClient;
 
-    private readonly string _mqttHost;
-    private readonly int _mqttPort;
-    private readonly bool _mqttUseTls;
-    private readonly string _mqttUsername;
-    private readonly string _mqttPassword;
-    private readonly string _mqttBaseTopic;
-    private readonly string _mqttClientId;
-    private readonly int _mqttQos;
-    private readonly bool _mqttRetain;
-    private readonly bool _mqttPublishJson;
+    private string _mqttHost;
+    private int _mqttPort;
+    private bool _mqttUseTls;
+    private string _mqttUsername;
+    private string _mqttPassword;
+    private string _mqttBaseTopic;
+    private string _mqttClientId;
+    private int _mqttQos;
+    private bool _mqttRetain;
+    private bool _mqttPublishJson;
 
     public MqttBroadcaster(PersistentSettings settings)
     {
         _settings = settings;
 
-        _mqttHost = _settings.GetValue("mqttHost", "localhost");
-        _mqttPort = _settings.GetValue("mqttPort", 1883);
-        _mqttUseTls = _settings.GetValue("mqttUseTls", false);
-        _mqttUsername = _settings.GetValue("mqttUsername", "");
-        _mqttPassword = _settings.GetValue("mqttPassword", "");
-        _mqttBaseTopic = _settings.GetValue("mqttBaseTopic", "librehardwaremonitor");
-        _mqttClientId = _settings.GetValue("mqttClientId", "");
-        _mqttQos = _settings.GetValue("mqttQos", 0);
-        _mqttRetain = _settings.GetValue("mqttRetain", true);
-        _mqttPublishJson = _settings.GetValue("mqttPublishJson", true);
+        ReloadSettings();
     }
 
     public void Start()
     {
+        ReloadSettings();
+        _mqttClient ??= new MqttFactory().CreateMqttClient();
+
         // Placeholder for connect/reconnect logic.
     }
 
@@ -60,6 +55,8 @@ public class MqttBroadcaster
         if (root == null)
             throw new ArgumentNullException(nameof(root));
 
+        ReloadSettings();
+
         List<ISensor> selectedSensors = new();
         CollectSelectedSensors(root, selectedSensors);
 
@@ -67,6 +64,20 @@ public class MqttBroadcaster
         _ = selectedSensors;
 
         // Placeholder for publish logic.
+    }
+
+    private void ReloadSettings()
+    {
+        _mqttHost = _settings.GetValue("mqttHost", "localhost");
+        _mqttPort = _settings.GetValue("mqttPort", 1883);
+        _mqttUseTls = _settings.GetValue("mqttUseTls", false);
+        _mqttUsername = _settings.GetValue("mqttUsername", "");
+        _mqttPassword = _settings.GetValue("mqttPassword", "");
+        _mqttBaseTopic = _settings.GetValue("mqttBaseTopic", "librehardwaremonitor");
+        _mqttClientId = _settings.GetValue("mqttClientId", "");
+        _mqttQos = _settings.GetValue("mqttQos", 0);
+        _mqttRetain = _settings.GetValue("mqttRetain", true);
+        _mqttPublishJson = _settings.GetValue("mqttPublishJson", true);
     }
 
     private void CollectSelectedSensors(Node currentNode, ICollection<ISensor> selectedSensors)
