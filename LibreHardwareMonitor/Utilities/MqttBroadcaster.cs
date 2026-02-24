@@ -65,6 +65,7 @@ public class MqttBroadcaster
             if (_reconnectTask is { IsCompleted: false })
                 return;
 
+            _reconnectCts?.Dispose();
             _reconnectCts = new CancellationTokenSource();
             _reconnectTask = Task.Run(() => RunReconnectLoopAsync(_reconnectCts.Token));
         }
@@ -75,6 +76,7 @@ public class MqttBroadcaster
         IMqttClient? mqttClient;
         CancellationTokenSource? reconnectCts;
         Task? reconnectTask;
+        Task publishTask;
 
         lock (_lifecycleLock)
         {
@@ -104,6 +106,20 @@ public class MqttBroadcaster
 
             if (mqttClient != null && mqttClient.IsConnected)
                 mqttClient.DisconnectAsync().AsTask().Wait(TimeSpan.FromSeconds(5));
+
+            lock (_publishLock)
+                publishTask = _publishTask;
+
+            try
+            {
+                publishTask.Wait(TimeSpan.FromSeconds(2));
+            }
+            catch
+            {
+            }
+
+            lock (_publishLock)
+                _publishTask = Task.CompletedTask;
         }
         catch (Exception ex)
         {
