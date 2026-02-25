@@ -35,6 +35,7 @@ public sealed partial class MainForm : Form
     private readonly UserOption _logSensors;
     private readonly UserOption _minimizeOnClose;
     private readonly UserOption _minimizeToTray;
+    private readonly MqttBroadcaster _mqttBroadcaster;
     private readonly PlotPanel _plotPanel;
     private readonly UserOption _readBatterySensors;
     private readonly UserOption _readCpuSensors;
@@ -61,6 +62,7 @@ public sealed partial class MainForm : Form
     private UserRadioGroup _plotLocation;
     private UserRadioGroup _splitPanelScalingSetting;
     private bool _selectionDragging;
+    private bool _mqttStopped;
     private IDictionary<ISensor, Color> _sensorPlotColors = new Dictionary<ISensor, Color>();
     private UserOption _showPlot;
     private UserRadioGroup _strokeThickness;
@@ -72,6 +74,8 @@ public sealed partial class MainForm : Form
 
         _settings = new PersistentSettings();
         _settings.Load(Path.ChangeExtension(Application.ExecutablePath, ".config"));
+
+        _mqttBroadcaster = new MqttBroadcaster(_settings);
 
         _unitManager = new UnitManager(_settings);
 
@@ -535,11 +539,14 @@ public sealed partial class MainForm : Form
         {
             _computer.Close();
             SaveConfiguration();
+            StopMqtt();
             if (_runWebServer.Value)
                 Server.Quit();
         };
 
         Microsoft.Win32.SystemEvents.PowerModeChanged += PowerModeChanged;
+
+        _mqttBroadcaster.Start();
     }
 
     private void StopFileHardwareMenuFromClosing(object sender, ToolStripDropDownClosingEventArgs e)
@@ -558,9 +565,12 @@ public sealed partial class MainForm : Form
 
     public HttpServer Server { get; }
 
+    public MqttBroadcaster MqttBroadcaster => _mqttBroadcaster;
+
     private void BackgroundUpdater_DoWork(object sender, DoWorkEventArgs e)
     {
         _computer.Accept(_updateVisitor);
+        _mqttBroadcaster.PublishSelectedSensors(_root, DateTime.UtcNow);
 
         if (_logSensors != null && _logSensors.Value && _delayCount >= 4)
             _logger.Log();
@@ -569,6 +579,15 @@ public sealed partial class MainForm : Form
             _delayCount++;
 
         _plotPanel.InvalidatePlot();
+    }
+
+    private void StopMqtt()
+    {
+        if (_mqttStopped)
+            return;
+
+        _mqttStopped = true;
+        _mqttBroadcaster.Stop();
     }
 
     private void PowerModeChanged(object sender, Microsoft.Win32.PowerModeChangedEventArgs eventArgs)
@@ -1033,6 +1052,7 @@ public sealed partial class MainForm : Form
         timer.Enabled = false;
         _computer.Close();
         SaveConfiguration();
+        StopMqtt();
         if (_runWebServer.Value)
             Server.Quit();
 
